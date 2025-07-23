@@ -6,63 +6,67 @@ local RunService = game:GetService("RunService")
 local PlayerService = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 
-local Debug, LocalPlayer = false, PlayerService.LocalPlayer
+local Debug,LocalPlayer = false,PlayerService.LocalPlayer
 local MainAssetFolder = Debug and ReplicatedStorage.BracketV32
 	or InsertService:LoadLocalAsset("rbxassetid://9153139105")
 
-local function GetAsset(AssetPath)
-	AssetPath = AssetPath:split("/")
-	local Asset = MainAssetFolder
-	for Index, Name in pairs(AssetPath) do
-		Asset = Asset[Name]
+	local function GetAsset(AssetPath)
+		AssetPath = AssetPath:split("/")
+		local Asset = MainAssetFolder
+		for Index,Name in pairs(AssetPath) do
+			Asset = Asset[Name]
+		end return Asset:Clone()
 	end
-	return Asset:Clone()
-end
-
-local function GetLongest(A, B)
+local function GetLongest(A,B)
 	return A > B and A or B
 end
-
-local function GetType(Object, Default, Type)
+local function GetType(Object,Default,Type)
 	if typeof(Object) == Type then
 		return Object
 	end
 	return Default
 end
 
-local function MakeDraggable(Dragger, Object, Callback)
-	local StartPosition, StartDrag, Dragging = nil, nil, false
-
-	local function BeginDrag(Input)
+local function MakeDraggable(Dragger,Object,Callback)
+	local StartPosition,StartDrag = nil,nil
+    local InputChanged = nil
+    local Dragging  = false
+	Dragger.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-			Dragging = true
 			StartPosition = UserInputService:GetMouseLocation()
 			StartDrag = Object.AbsolutePosition
+            Dragging = true
 
-			Input.Changed:Connect(function()
-				if Input.UserInputState == Enum.UserInputState.End then
-					Dragging = false
-					Callback(Object.Position)
-				end
-			end)
+            if InputChanged then
+                return
+            end
+
+            InputChanged = Input.Changed:Connect(function()
+                if Input.UserInputState == Enum.UserInputState.End then
+                    StartPosition,StartDrag = nil,nil
+                    Callback(Object.Position)
+                    Dragging = false
+
+                    IpnutChanged:Disconnect()
+                    InputChanged = nil
+                end
+            end)
 		end
-	end
-
-	local function UpdateDrag(Input)
-		if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
-			local Mouse = UserInputService:GetMouseLocation()
-			local Delta = Mouse - StartPosition
-			Object.Position = Object.Position + UDim2.new(0, Delta.X, 0, Delta.Y)
-			StartPosition = Mouse
+	end)
+	UserInputService.InputChanged:Connect(function(Input)
+		if Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch then
+            if Dragging then 
+                local Mouse = UserInputService:GetMouseLocation()
+                local Delta = Mouse - StartPosition
+                StartPosition = Mouse
+                Object.Position = Object.Position + UDim2.new(0,Delta.X,0,Delta.Y)
+            end
 		end
-	end
-
-	Dragger.InputBegan:Connect(BeginDrag)
-	UserInputService.InputChanged:Connect(UpdateDrag)
+	end)
 end
 
-local function MakeResizeable(Dragger, Object, MinSize, Callback)
-	local StartPosition, StartSize = nil, nil
+local function MakeResizeable(Dragger,Object,MinSize,Callback)
+	local StartPosition,StartSize = nil,nil
 	Dragger.InputBegan:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 then
 			StartPosition = UserInputService:GetMouseLocation()
@@ -73,48 +77,40 @@ local function MakeResizeable(Dragger, Object, MinSize, Callback)
 		if StartPosition and Input.UserInputType == Enum.UserInputType.MouseMovement then
 			local Mouse = UserInputService:GetMouseLocation()
 			local Delta = Mouse - StartPosition
+
 			local Size = StartSize + Delta
-			local SizeX = math.max(MinSize.X, Size.X)
-			local SizeY = math.max(MinSize.Y, Size.Y)
-			Object.Size = UDim2.fromOffset(SizeX, SizeY)
+			local SizeX = math.max(MinSize.X,Size.X)
+			local SizeY = math.max(MinSize.Y,Size.Y)
+			Object.Size = UDim2.fromOffset(SizeX,SizeY)
 		end
 	end)
 	Dragger.InputEnded:Connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-			StartPosition, StartSize = nil, nil
+			StartPosition,StartSize = nil,nil
 			Callback(Object.Size)
 		end
 	end)
 end
 
-local function ChooseTab(ScreenAsset, TabButtonAsset, TabAsset)
-	for Index, Instance in pairs(ScreenAsset:GetChildren()) do
+local function ChooseTab(ScreenAsset,TabButtonAsset,TabAsset)
+	for Index,Instance in pairs(ScreenAsset:GetChildren()) do
 		if Instance.Name == "Palette" or Instance.Name == "OptionContainer" then
 			Instance.Visible = false
 		end
 	end
-	for Index, Instance in pairs(ScreenAsset.Window.TabContainer:GetChildren()) do
+	for Index,Instance in pairs(ScreenAsset.Window.TabContainer:GetChildren()) do
 		if Instance:IsA("ScrollingFrame") and Instance ~= TabAsset then
 			Instance.Visible = false
 		else
 			Instance.Visible = true
 		end
 	end
-	for Index, Instance in pairs(ScreenAsset.Window.TabButtonContainer:GetChildren()) do
+	for Index,Instance in pairs(ScreenAsset.Window.TabButtonContainer:GetChildren()) do
 		if Instance:IsA("TextButton") then
 			Instance.Highlight.Visible = Instance == TabButtonAsset
 		end
 	end
 end
-
-local ScreenAsset = GetAsset("Screen")
-ScreenAsset.Parent = CoreGui
-
-local Dragger = ScreenAsset.Window:FindFirstChild("Titlebar") or ScreenAsset.Window
-local Object = ScreenAsset.Window
-
-MakeDraggable(Dragger, Object, function(newPosition) end)
-
 local function ChooseTabSide(TabAsset,Mode)
 	if Mode == "Longest" then
 		if TabAsset.LeftSide.ListLayout.AbsoluteContentSize.Y > TabAsset.RightSide.ListLayout.AbsoluteContentSize.Y then
